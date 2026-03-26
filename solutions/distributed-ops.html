@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed Operations — Jack Hawkins OPS</title>
+  <style>
+    :root {
+      --bg-deep: #08090a;
+      --bg-surface: #0d0f11;
+      --bg-card: #111416;
+      --accent: #3ddc84;
+      --accent-glow: #2ec77a;
+      --accent-dim: rgba(61,220,132,0.08);
+      --text-primary: #e4e8ec;
+      --text-secondary: #7a8a96;
+      --text-dim: #3a4a56;
+      --glass-bg: rgba(13,15,17,0.75);
+      --glass-border: rgba(61,220,132,0.10);
+      --border-subtle: rgba(255,255,255,0.04);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      overflow-x: hidden;
+      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="4" fill="%233ddc84"/><circle cx="16" cy="16" r="10" fill="none" stroke="%233ddc84" stroke-width="1.5" opacity="0.5"/></svg>') 16 16, auto;
+    }
+
+    /* Particle canvas background */
+    canvas#particleCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      opacity: 0.3;
+    }
+
+    /* Noise overlay */
+    .noise-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.04;
+      background-image: url('data:image/svg+xml,<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/></filter><rect width="400" height="400" fill="white" filter="url(%23noise)"/></svg>');
+      background-size: 100px 100px;
+      mix-blend-mode: overlay;
+    }
+
+    /* Scanline effect */
+    .scanline {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.03),
+        rgba(0, 0, 0, 0.03) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      animation: scan 8s linear infinite;
+    }
+
+    @keyframes scan {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(10px); }
+    }
+
+    /* Content wrapper */
+    .content-wrapper {
+      position: relative;
+      z-index: 3;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      padding: 0 40px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--glass-border);
+      z-index: 1000;
+    }
+
+    .nav-brand {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-brand::before {
+      content: '◆';
+      font-size: 10px;
+    }
+
+    /* Hero section */
+    .hero {
+      margin-top: 64px;
+      padding: 120px 40px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--accent);
+      letter-spacing: 1px;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.2s forwards;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 8vw, 64px);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.3s forwards;
+    }
+
+    .hero-subhead {
+      font-size: 18px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto 48px;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.4s forwards;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Scroll reveal class */
+    .scroll-reveal {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+    }
+
+    .scroll-reveal.in-view {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Section spacing */
+    section {
+      padding: 100px 40px;
+      position: relative;
+    }
+
+    section h2 {
+      font-size: clamp(28px, 6vw, 48px);
+      font-weight: 700;
+      margin-bottom: 60px;
+      text-align: center;
+    }
+
+    /* Who it's for cards */
+    .who-section {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+
+    .glass-card {
+      padding: 32px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      transition: all 0.4s ease;
+    }
+
+    .glass-card:hover {
+      background: rgba(13, 15, 17, 0.95);
+      border-color: var(--accent);
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(61, 220, 132, 0.1);
+    }
+
+    .glass-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--accent);
+    }
+
+    .glass-card p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+
+    /* Problem section */
+    .problem-section {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .problem-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .problem-item {
+      padding: 24px;
+      background: var(--bg-card);
+      border-left: 3px solid var(--accent);
+      border-radius: 4px;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
+    }
+
+    .problem-item:hover {
+      background: rgba(61, 220, 132, 0.04);
+      transform: translateX(12px);
+    }
+
+    .problem-item::before {
+      content: '×';
+      color: var(--accent);
+      font-weight: 700;
+      margin-right: 12px;
+    }
+
+    .problem-kicker {
+      text-align: center;
+      padding: 40px 24px;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border-radius: 8px;
+      margin-top: 40px;
+    }
+
+    /* Solution workflow */
+    .workflow-section {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .workflow-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 32px;
+      margin-bottom: 60px;
+    }
+
+    .step {
+      text-align: center;
+    }
+
+    .step-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 16px;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out forwards;
+    }
+
+    .step:nth-child(1) .step-number { animation-delay: 0.1s; }
+    .step:nth-child(2) .step-number { animation-delay: 0.2s; }
+    .step:nth-child(3) .step-number { animation-delay: 0.3s; }
+    .step:nth-child(4) .step-number { animation-delay: 0.4s; }
+
+    .step p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Services section */
+    .services-section {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .service-row {
+      padding: 24px;
+      margin-bottom: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+
+    .service-row:hover {
+      background: rgba(61, 220, 132, 0.06);
+      border-color: var(--glass-border);
+      transform: translateX(12px);
+    }
+
+    .service-name {
+      font-weight: 500;
+      font-size: 15px;
+      color: var(--text-primary);
+    }
+
+    .service-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    /* Metrics section */
+    .metrics-section {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+
+    .metric-card {
+      padding: 28px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--accent-dim);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .metric-card:hover::before {
+      opacity: 1;
+    }
+
+    .metric-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-8px);
+    }
+
+    .metric-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .metric-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .metric-before {
+      font-size: 14px;
+      color: var(--text-dim);
+      text-decoration: line-through;
+      margin-bottom: 8px;
+    }
+
+    .metric-arrow {
+      color: var(--accent);
+      margin: 8px 0;
+      font-size: 12px;
+    }
+
+    .metric-after {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .metric-reclaim {
+      grid-column: 1 / -1;
+      padding: 40px;
+      background: var(--accent-dim);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    /* Implementation section */
+    .implementation-section {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 32px;
+      margin-bottom: 60px;
+    }
+
+    .pricing-card {
+      padding: 40px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      transition: all 0.4s ease;
+    }
+
+    .pricing-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-12px);
+      box-shadow: 0 20px 40px rgba(61, 220, 132, 0.15);
+    }
+
+    .pricing-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text-primary);
+    }
+
+    .pricing-price {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .pricing-duration {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    /* CTA Section */
+    .cta-section {
+      text-align: center;
+      padding: 80px 40px;
+    }
+
+    .cta-content h2 {
+      margin-bottom: 24px;
+    }
+
+    .cta-text {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      max-width: 700px;
+      margin: 0 auto 40px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 32px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.3s ease;
+      font-family: 'Sora', sans-serif;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg-deep);
+      box-shadow: 0 0 20px rgba(61, 220, 132, 0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 30px rgba(61, 220, 132, 0.6);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .btn-secondary:hover {
+      background: var(--accent-dim);
+      transform: translateY(-3px);
+    }
+
+    /* Footer */
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: var(--glass-bg);
+      border-top: 1px solid var(--glass-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      z-index: 900;
+      backdrop-filter: blur(10px);
+    }
+
+    .footer-left {
+      display: flex;
+      gap: 32px;
+    }
+
+    .footer-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .footer-item::before {
+      content: '▪';
+      color: var(--accent);
+    }
+
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .footer-divider {
+      width: 1px;
+      height: 12px;
+      background: var(--border-subtle);
+    }
+
+    body {
+      padding-bottom: 48px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      nav {
+        padding: 0 24px;
+      }
+
+      .hero {
+        padding: 80px 24px;
+      }
+
+      section {
+        padding: 60px 24px;
+      }
+
+      footer {
+        padding: 0 24px;
+      }
+
+      .workflow-steps {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .cta-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .btn {
+        width: 100%;
+        max-width: 300px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 {
+        font-size: 28px;
+      }
+
+      .hero-subhead {
+        font-size: 14px;
+      }
+
+      .cards-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .workflow-steps {
+        grid-template-columns: 1fr;
+      }
+
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+
+      footer {
+        flex-direction: column;
+        gap: 12px;
+        height: auto;
+        padding: 16px 24px;
+      }
+
+      .footer-left {
+        flex-direction: column;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas"></canvas>
+  <div class="noise-overlay"></div>
+  <div class="scanline"></div>
+
+  <nav>
+    <a href="#" class="nav-brand">JACK HAWKINS_OPS</a>
+  </nav>
+
+  <div class="content-wrapper">
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-eyebrow">/// Solutions / Distributed Teams</div>
+      <h1>Stop managing a global team with a timezone spreadsheet.</h1>
+      <p class="hero-subhead">You've scaled fast across multiple countries. The ops infrastructure hasn't kept up. Contractors in three jurisdictions, payroll in five currencies, onboarding that's inconsistent across time zones. We deploy production-ready workflow automation for distributed team operations. Starting in 2 weeks.</p>
+    </section>
+
+    <!-- Who It's For -->
+    <section class="who-section">
+      <h2>Who It's For</h2>
+      <div class="cards-grid scroll-reveal">
+        <div class="glass-card">
+          <h3>Scale</h3>
+          <p>50–500+ people across 5+ countries or time zones</p>
+        </div>
+        <div class="glass-card">
+          <h3>Complexity</h3>
+          <p>Mix of employees, contractors, and agency partners on same workflows</p>
+        </div>
+        <div class="glass-card">
+          <h3>Constraint</h3>
+          <p>HR/People team is one or two people compensating for broken systems</p>
+        </div>
+        <div class="glass-card">
+          <h3>Pain Point</h3>
+          <p>Payroll, compliance, and tool provisioning are manual processes</p>
+        </div>
+        <div class="glass-card">
+          <h3>Need</h3>
+          <p>Leadership wants global ops visibility without weekly ops call per region</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="problem-section">
+      <h2>The Workflow You're Actually Running</h2>
+      <div class="problem-list scroll-reveal">
+        <div class="problem-item">New hires in different regions get wildly different onboarding depending on which manager set it up</div>
+        <div class="problem-item">Contractor agreements tracked in inboxes, Drive folders, or spreadsheets. Renewals slip</div>
+        <div class="problem-item">System access provisioned manually. New starters waiting days for tools. Offboarding leaves orphaned accounts</div>
+        <div class="problem-item">Payroll has manual steps every month — timesheets, expenses, currency conversions don't flow end-to-end</div>
+        <div class="problem-item">Cross-region reporting is a synthesis exercise assembled from 4 different sources</div>
+        <div class="problem-item">Compliance obligations (right-to-work, IR35, 1099) tracked by memory and individual effort</div>
+      </div>
+      <div class="problem-kicker scroll-reveal">None of this is unusual at your stage. It's also all fixable.</div>
+    </section>
+
+    <!-- Workflow Section -->
+    <section class="workflow-section">
+      <h2>What It Looks Like After</h2>
+      <div class="workflow-steps scroll-reveal">
+        <div class="step">
+          <div class="step-number">01</div>
+          <p>Offer accepted → everything triggered</p>
+        </div>
+        <div class="step">
+          <div class="step-number">02</div>
+          <p>Contractor lifecycle managed</p>
+        </div>
+        <div class="step">
+          <div class="step-number">03</div>
+          <p>Monthly ops runs itself</p>
+        </div>
+        <div class="step">
+          <div class="step-number">04</div>
+          <p>Global visibility, no ops calls</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Services Section -->
+    <section class="services-section">
+      <h2>What We Deploy</h2>
+      <div class="scroll-reveal">
+        <div class="service-row">
+          <div class="service-name">Region-aware onboarding</div>
+          <div class="service-meta">Jurisdiction-compliant, automated</div>
+        </div>
+        <div class="service-row">
+          <div class="service-name">System access provisioning & offboarding</div>
+          <div class="service-meta">Same-day deployment, zero manual steps</div>
+        </div>
+        <div class="service-row">
+          <div class="service-name">Contractor lifecycle automation</div>
+          <div class="service-meta">Agreements, renewals, compliance tracking</div>
+        </div>
+        <div class="service-row">
+          <div class="service-name">Payroll input reconciliation</div>
+          <div class="service-meta">End-to-end, monthly exception-only</div>
+        </div>
+        <div class="service-row">
+          <div class="service-name">Global headcount & cost reporting</div>
+          <div class="service-meta">Real-time dashboards, no assembly required</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Metrics Section -->
+    <section class="metrics-section">
+      <h2>The Impact</h2>
+      <div class="metrics-grid scroll-reveal">
+        <div class="metric-card">
+          <div class="metric-content">
+            <div class="metric-label">Onboarding</div>
+            <div class="metric-before">Manager-dependent</div>
+            <div class="metric-arrow">→</div>
+            <div class="metric-after">Jurisdiction-aware automation</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-content">
+            <div class="metric-label">System provisioning</div>
+            <div class="metric-before">Days</div>
+            <div class="metric-arrow">→</div>
+            <div class="metric-after">Same day</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-content">
+            <div class="metric-label">Offboarding gaps</div>
+            <div class="metric-before">Frequent</div>
+            <div class="metric-arrow">→</div>
+            <div class="metric-after">Closed automatically</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-content">
+            <div class="metric-label">Payroll manual steps</div>
+            <div class="metric-before">Every month</div>
+            <div class="metric-arrow">→</div>
+            <div class="metric-after">Exception-only</div>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-content">
+            <div class="metric-label">Global reporting</div>
+            <div class="metric-before">Assembled on request</div>
+            <div class="metric-arrow">→</div>
+            <div class="metric-after">Always available</div>
+          </div>
+        </div>
+        <div class="metric-reclaim">20–40 hours/month reclaimed</div>
+      </div>
+    </section>
+
+    <!-- Implementation Section -->
+    <section class="implementation-section">
+      <h2>Implementation</h2>
+      <div class="pricing-grid scroll-reveal">
+        <div class="pricing-card">
+          <h3>Ops Audit</h3>
+          <div class="pricing-price">$5,000</div>
+          <div class="pricing-duration">2 weeks</div>
+          <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">Deep audit of current ops infrastructure, system landscape, compliance obligations, and automation opportunities. Deliverable: detailed roadmap with prioritized fixes.</p>
+        </div>
+        <div class="pricing-card">
+          <h3>Deployment Sprint</h3>
+          <div class="pricing-price">$20,000–$40,000</div>
+          <div class="pricing-duration">4 weeks</div>
+          <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">Build and deploy fully automated workflows. API integrations, system provisioning, payroll reconciliation, compliance tracking. Go-live ready.</p>
+        </div>
+        <div class="pricing-card">
+          <h3>Retained Ops</h3>
+          <div class="pricing-price">$3,000–$5,000/month</div>
+          <div class="pricing-duration">Ongoing</div>
+          <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">Ongoing support. System refinement, new region onboarding, compliance updates, and performance optimization. Your ops team gets its time back.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+      <div class="cta-content scroll-reveal">
+        <h2>Guaranteed.</h2>
+        <p class="cta-text">If we deploy this and your team isn't reclaiming time every single month, we'll keep working at no additional cost until you are. Your ops are too important to ship half-solved.</p>
+        <div class="cta-buttons">
+          <a href="#" class="btn btn-primary">Schedule a 15-min call</a>
+          <a href="#" class="btn btn-secondary">Read case study</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="footer-left">
+      <div class="footer-item">Ops automation for distributed teams</div>
+      <div class="footer-item">2–4 week deployment</div>
+    </div>
+    <div class="footer-right">
+      <span>jack.hawkins.ops@example.com</span>
+      <div class="footer-divider"></div>
+      <span>© 2026</span>
+    </div>
+  </footer>
+
+  <script>
+    // Particle canvas
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const particles = [];
+    const particleCount = 40;
+
+    class Particle {
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.vx = (Math.random() - 0.5) * 0.5;
+        this.vy = (Math.random() - 0.5) * 0.5;
+        this.radius = Math.random() * 1.5;
+        this.opacity = Math.random() * 0.5 + 0.3;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+        if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+      }
+
+      draw() {
+        ctx.fillStyle = `rgba(61, 220, 132, ${this.opacity})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < particleCount; i++) {
+      particles.push(new Particle());
+    }
+
+    function animateParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      particles.forEach(particle => {
+        particle.update();
+        particle.draw();
+      });
+
+      requestAnimationFrame(animateParticles);
+    }
+
+    animateParticles();
+
+    // Scroll reveal
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -100px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.scroll-reveal').forEach(el => {
+      observer.observe(el);
+    });
+
+    // Smooth scroll for anchors
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        const href = this.getAttribute('href');
+        if (href !== '#') {
+          e.preventDefault();
+          const target = document.querySelector(href);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

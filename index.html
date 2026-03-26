@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jack Hawkins — AI Ops for Growth-Stage Companies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Sora:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-deep: #08090a;
+  --bg-surface: #0d0f11;
+  --bg-card: #111416;
+  --accent: #3ddc84;
+  --accent-glow: #2ec77a;
+  --accent-dim: rgba(61,220,132,0.08);
+  --text-primary: #e4e8ec;
+  --text-secondary: #7a8a96;
+  --text-dim: #3a4a56;
+  --glass-bg: rgba(13,15,17,0.75);
+  --glass-border: rgba(61,220,132,0.10);
+  --border-subtle: rgba(255,255,255,0.04);
+  --glow-soft: 0 0 80px rgba(61,220,132,0.06);
+}
+
+html { scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: var(--accent) var(--bg-deep); }
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Sora', sans-serif;
+  overflow-x: hidden;
+  cursor: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── CURSOR ── */
+.cursor-dot {
+  position: fixed; width: 6px; height: 6px; background: var(--accent); border-radius: 50%;
+  pointer-events: none; z-index: 10000; mix-blend-mode: screen;
+  transition: transform 0.15s ease;
+}
+.cursor-ring {
+  position: fixed; width: 36px; height: 36px; border: 1px solid rgba(61,220,132,0.35);
+  border-radius: 50%; pointer-events: none; z-index: 10000;
+  transition: width 0.3s, height 0.3s, border-color 0.3s;
+}
+.cursor-ring.hovering { width: 52px; height: 52px; border-color: var(--accent); border-width: 2px; }
+.cursor-dot.hovering { transform: scale(0); }
+
+/* ── CANVAS + OVERLAYS ── */
+#particle-canvas { position: fixed; top:0; left:0; width:100%; height:100%; z-index:0; opacity:0.4; }
+.noise-overlay {
+  position:fixed; top:0; left:0; width:100%; height:100%; z-index:1; pointer-events:none; opacity:0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat:repeat; background-size:256px;
+}
+.scanline {
+  position:fixed; top:0; left:0; width:100%; height:2px; z-index:2; pointer-events:none;
+  background: linear-gradient(90deg, transparent, rgba(61,220,132,0.04), transparent);
+  animation: scanline 10s linear infinite;
+}
+@keyframes scanline { 0%{top:-2px} 100%{top:100vh} }
+
+section { position: relative; z-index: 3; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 clamp(24px, 5vw, 72px); }
+
+/* ── NAV ── */
+nav {
+  position:fixed; top:0; left:0; width:100%; z-index:100; padding:20px 0;
+  backdrop-filter:blur(20px); background:rgba(8,9,10,0.75);
+  border-bottom:1px solid var(--border-subtle);
+}
+nav .container { display:flex; justify-content:space-between; align-items:center; }
+.nav-logo {
+  font-family:'JetBrains Mono',monospace; font-weight:500; font-size:13px;
+  letter-spacing:3px; text-transform:uppercase; color:var(--text-primary);
+}
+.nav-logo span { color:var(--accent); }
+.nav-links { display:flex; gap:32px; list-style:none; }
+.nav-links a {
+  font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:2px;
+  text-transform:uppercase; color:var(--text-secondary); text-decoration:none;
+  transition:color 0.3s; position:relative;
+}
+.nav-links a::after {
+  content:''; position:absolute; bottom:-4px; left:0; width:0; height:1px;
+  background:var(--accent); transition:width 0.3s;
+}
+.nav-links a:hover { color:var(--text-primary); }
+.nav-links a:hover::after { width:100%; }
+
+/* ── HERO ── */
+.hero { min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding-top:100px; }
+.hero-eyebrow {
+  font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:5px;
+  text-transform:uppercase; color:var(--accent); margin-bottom:28px;
+  opacity:0; animation:fadeUp 0.8s 0.3s forwards;
+}
+.hero-headline {
+  font-size:clamp(36px,6vw,78px); font-weight:200; line-height:1.08;
+  letter-spacing:-2px; max-width:860px; margin-bottom:28px;
+}
+.hero-headline .decode-text { display:inline-block; opacity:0; }
+.hero-headline em { font-style:normal; color:var(--accent); text-shadow:0 0 40px rgba(61,220,132,0.25); }
+.hero-sub {
+  font-size:clamp(15px,1.6vw,18px); font-weight:300; color:var(--text-secondary);
+  max-width:580px; line-height:1.75; margin-bottom:12px;
+  opacity:0; animation:fadeUp 0.8s 1.4s forwards;
+}
+.hero-guarantee {
+  font-size:clamp(13px,1.3vw,15px); font-weight:300; color:var(--text-dim);
+  max-width:580px; line-height:1.6; margin-bottom:44px;
+  opacity:0; animation:fadeUp 0.8s 1.7s forwards;
+}
+.hero-guarantee strong { color:var(--text-secondary); font-weight:400; }
+.cta-btn {
+  display:inline-flex; align-items:center; gap:12px; padding:18px 40px;
+  font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:3px;
+  text-transform:uppercase; color:var(--bg-deep); font-weight:500;
+  background:var(--accent); border:none; border-radius:0; text-decoration:none;
+  position:relative; overflow:hidden; transition:background 0.4s, box-shadow 0.4s;
+  opacity:0; animation:fadeUp 0.8s 2s forwards;
+}
+.cta-btn:hover { background:#4ae892; box-shadow:0 0 40px rgba(61,220,132,0.25); }
+.cta-btn .arrow { transition:transform 0.3s; }
+.cta-btn:hover .arrow { transform:translateX(4px); }
+.cta-btn-ghost {
+  display:inline-flex; align-items:center; gap:12px; padding:18px 40px;
+  font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:3px;
+  text-transform:uppercase; color:var(--text-primary);
+  background:transparent; border:1px solid var(--glass-border); border-radius:0;
+  text-decoration:none; position:relative; overflow:hidden;
+  transition:border-color 0.4s, color 0.4s;
+}
+.cta-btn-ghost::before {
+  content:''; position:absolute; top:0; left:-100%; width:100%; height:100%;
+  background:linear-gradient(90deg, transparent, rgba(61,220,132,0.08), transparent);
+  transition:left 0.6s;
+}
+.cta-btn-ghost:hover { border-color:var(--accent); }
+.cta-btn-ghost:hover::before { left:100%; }
+.cta-btn-ghost .arrow { transition:transform 0.3s; }
+.cta-btn-ghost:hover .arrow { transform:translateX(4px); }
+
+.hero-orb {
+  position:absolute; right:-8%; top:15%; width:600px; height:600px;
+  background:radial-gradient(circle, rgba(61,220,132,0.05) 0%, transparent 70%);
+  border-radius:50%; filter:blur(80px); pointer-events:none;
+  animation:orbPulse 7s ease-in-out infinite;
+}
+@keyframes orbPulse { 0%,100%{opacity:0.5;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)} }
+
+/* ── PROBLEM ── */
+.problem { padding:160px 0; }
+.section-eyebrow {
+  font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:5px;
+  text-transform:uppercase; color:var(--text-dim); margin-bottom:20px;
+}
+.section-headline {
+  font-size:clamp(28px,4.5vw,56px); font-weight:300; line-height:1.12;
+  max-width:750px; margin-bottom:40px; letter-spacing:-1px;
+}
+.section-headline em { font-style:normal; color:var(--accent); }
+.problem-grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border-subtle); margin-bottom:40px; }
+.problem-item {
+  background:var(--bg-deep); padding:32px 36px; transition:background 0.4s;
+  border-left:2px solid transparent;
+}
+.problem-item:hover { background:var(--bg-surface); border-left-color:var(--accent); }
+.problem-item p { font-size:15px; font-weight:300; color:var(--text-secondary); line-height:1.7; }
+.problem-kicker {
+  font-size:clamp(14px,1.4vw,16px); font-weight:300; color:var(--text-dim);
+  max-width:640px; line-height:1.7; font-style:italic;
+}
+.problem-kicker strong { color:var(--accent); font-weight:400; font-style:normal; }
+
+/* ── FIT ── */
+.fit { padding:120px 0; }
+.fit-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; margin-top:40px; }
+.fit-card {
+  background:var(--glass-bg); border:1px solid var(--glass-border); padding:36px;
+  backdrop-filter:blur(16px); transition:border-color 0.4s, box-shadow 0.4s;
+  position:relative; overflow:hidden;
+}
+.fit-card:hover { border-color:rgba(61,220,132,0.25); box-shadow:var(--glow-soft); }
+.fit-card .fit-icon {
+  font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:3px;
+  color:var(--accent); margin-bottom:16px; text-transform:uppercase;
+}
+.fit-card p { font-size:15px; font-weight:300; color:var(--text-secondary); line-height:1.7; }
+
+/* ── HOW IT WORKS ── */
+.how-it-works { padding:160px 0; }
+.steps-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border-subtle); margin-top:48px; }
+.step-item {
+  background:var(--bg-deep); padding:48px 32px; position:relative; transition:background 0.4s;
+}
+.step-item:hover { background:var(--bg-surface); }
+.step-num {
+  font-family:'JetBrains Mono',monospace; font-size:48px; font-weight:200;
+  color:var(--accent); opacity:0.3; margin-bottom:20px; transition:opacity 0.4s;
+}
+.step-item:hover .step-num { opacity:1; }
+.step-item h3 { font-size:20px; font-weight:400; margin-bottom:14px; letter-spacing:-0.3px; }
+.step-item p { font-size:14px; font-weight:300; color:var(--text-secondary); line-height:1.75; }
+
+/* ── SERVICES ── */
+.services { padding:160px 0; }
+.services-grid { display:flex; flex-direction:column; gap:1px; background:var(--border-subtle); margin-top:48px; }
+.service-row {
+  background:var(--bg-deep); display:grid; grid-template-columns:280px 1fr; gap:60px;
+  padding:60px 48px; transition:background 0.4s; position:relative;
+}
+.service-row:hover { background:var(--bg-surface); }
+.service-left { position:relative; }
+.service-phase {
+  font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:4px;
+  text-transform:uppercase; color:var(--accent); margin-bottom:12px;
+}
+.service-left h3 { font-size:24px; font-weight:400; margin-bottom:8px; letter-spacing:-0.5px; }
+.service-price {
+  font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text-dim);
+  letter-spacing:1px;
+}
+.service-right p { font-size:15px; font-weight:300; color:var(--text-secondary); line-height:1.8; margin-bottom:16px; }
+.service-details { list-style:none; }
+.service-details li {
+  font-size:14px; font-weight:300; color:var(--text-dim); line-height:1.7;
+  padding:6px 0; padding-left:20px; position:relative;
+}
+.service-details li::before {
+  content:''; position:absolute; left:0; top:14px; width:6px; height:1px;
+  background:var(--accent); opacity:0.5;
+}
+.service-guarantee {
+  margin-top:16px; padding:16px 20px; background:var(--accent-dim);
+  border-left:2px solid var(--accent); font-size:14px; font-weight:300;
+  color:var(--text-secondary); line-height:1.7;
+}
+
+/* ── CREDIBILITY ── */
+.credibility { padding:160px 0; }
+.cred-inner { display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:start; }
+.cred-text p {
+  font-size:clamp(15px,1.5vw,17px); font-weight:300; color:var(--text-secondary);
+  line-height:1.8; margin-bottom:20px;
+}
+.cred-text p strong { color:var(--text-primary); font-weight:400; }
+.cred-stats { display:flex; flex-direction:column; gap:32px; margin-top:8px; }
+.cred-stat { display:flex; align-items:baseline; gap:20px; }
+.cred-stat-num {
+  font-family:'Sora',sans-serif; font-size:42px; font-weight:200;
+  color:var(--accent); min-width:140px; letter-spacing:-1px;
+}
+.cred-stat-label { font-size:14px; font-weight:300; color:var(--text-secondary); line-height:1.6; }
+
+/* ── FAQ ── */
+.faq { padding:160px 0; }
+.faq-grid { display:flex; flex-direction:column; gap:1px; background:var(--border-subtle); margin-top:48px; }
+.faq-item {
+  background:var(--bg-deep); padding:36px 40px; cursor:pointer;
+  transition:background 0.3s;
+}
+.faq-item:hover { background:var(--bg-surface); }
+.faq-q {
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:17px; font-weight:400; letter-spacing:-0.3px;
+}
+.faq-toggle {
+  font-family:'JetBrains Mono',monospace; font-size:18px; color:var(--accent);
+  transition:transform 0.3s; flex-shrink:0; margin-left:20px;
+}
+.faq-item.open .faq-toggle { transform:rotate(45deg); }
+.faq-a {
+  max-height:0; overflow:hidden; transition:max-height 0.5s cubic-bezier(0.16,1,0.3,1), padding 0.4s;
+}
+.faq-item.open .faq-a { max-height:400px; padding-top:20px; }
+.faq-a p { font-size:15px; font-weight:300; color:var(--text-secondary); line-height:1.8; }
+
+/* ── INDUSTRIES ── */
+.industries { padding:80px 0; }
+.industries-marquee {
+  overflow:hidden; padding:32px 0;
+  border-top:1px solid var(--border-subtle); border-bottom:1px solid var(--border-subtle);
+}
+.marquee-track { display:flex; gap:56px; animation:marquee 35s linear infinite; width:max-content; }
+.marquee-item {
+  font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:3px;
+  text-transform:uppercase; color:var(--text-dim); white-space:nowrap; transition:color 0.3s;
+}
+.marquee-item:hover { color:var(--accent); }
+@keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+/* ── FOOTER CTA ── */
+.footer-cta {
+  min-height:80vh; display:flex; flex-direction:column; justify-content:center;
+  align-items:center; text-align:center; padding:120px 24px;
+}
+.footer-cta-eyebrow {
+  font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:4px;
+  text-transform:uppercase; color:var(--text-dim); margin-bottom:24px;
+}
+.footer-cta-headline {
+  font-size:clamp(32px,6vw,72px); font-weight:200; line-height:1.1;
+  letter-spacing:-2px; margin-bottom:20px; max-width:700px;
+}
+.footer-cta-sub {
+  font-size:clamp(15px,1.5vw,17px); font-weight:300; color:var(--text-secondary);
+  max-width:500px; line-height:1.7; margin-bottom:48px;
+}
+
+/* ── FOOTER BAR ── */
+.footer-bar {
+  border-top:1px solid var(--border-subtle); padding:28px 0; z-index:3; position:relative;
+}
+.footer-bar .container { display:flex; justify-content:space-between; align-items:center; }
+.footer-links { display:flex; gap:32px; list-style:none; }
+.footer-links a {
+  font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:2px;
+  text-transform:uppercase; color:var(--text-dim); text-decoration:none; transition:color 0.3s;
+}
+.footer-links a:hover { color:var(--text-primary); }
+.footer-copy { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); letter-spacing:1px; }
+
+/* ── ANIMATIONS ── */
+.reveal { opacity:0; transform:translateY(24px); transition:opacity 0.8s cubic-bezier(0.16,1,0.3,1), transform 0.8s cubic-bezier(0.16,1,0.3,1); }
+.reveal.visible { opacity:1; transform:translateY(0); }
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px) {
+  .problem-grid { grid-template-columns:1fr; }
+  .steps-grid { grid-template-columns:1fr 1fr; }
+  .service-row { grid-template-columns:1fr; gap:24px; padding:40px 28px; }
+  .cred-inner { grid-template-columns:1fr; gap:48px; }
+  .nav-links { display:none; }
+  .cursor-dot,.cursor-ring { display:none; }
+  body { cursor:auto; }
+}
+@media(max-width:600px) {
+  .steps-grid { grid-template-columns:1fr; }
+  .fit-grid { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+<canvas id="particle-canvas"></canvas>
+<div class="noise-overlay"></div>
+<div class="scanline"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="container">
+    <div class="nav-logo">JACK HAWKINS<span>_</span>OPS</div>
+    <ul class="nav-links">
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#services">Services</a></li>
+      <li><a href="#credential">Credential</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-eyebrow">/// AI Ops for Growth-Stage Companies</div>
+    <h1 class="hero-headline">
+      <span class="decode-text" data-text="Make AI actually">Make AI actually</span><br>
+      <span class="decode-text" data-text="run your business." data-em="run"><em>run</em> your business.</span>
+    </h1>
+    <p class="hero-sub">For AI-native and growth-stage companies ($5M&ndash;$100M) still held together by Slack threads and spreadsheets.</p>
+    <p class="hero-guarantee"><strong>First production-ready AI workflow deployed in 2 weeks</strong> and a plan to reclaim 10+ hours/month of manual work &mdash; or we deploy another one free.</p>
+    <a href="#contact" class="cta-btn magnetic-btn">
+      Book the Ops Audit
+      <span class="arrow">&rarr;</span>
+    </a>
+  </div>
+  <div class="hero-orb"></div>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem">
+  <div class="container">
+    <div class="section-eyebrow reveal">/// The Problem</div>
+    <h2 class="section-headline reveal">Your ops aren't broken.<br>They're held together by <em>people</em>.</h2>
+    <div class="problem-grid reveal">
+      <div class="problem-item"><p>Leads go cold because no one remembered to follow up.</p></div>
+      <div class="problem-item"><p>Onboarding still runs on a 47-step Notion doc that three people interpret differently.</p></div>
+      <div class="problem-item"><p>Your CRM, inbox, ticketing tool, and spreadsheets all disagree on the same customer.</p></div>
+      <div class="problem-item"><p>You're paying senior people to copy-paste data between systems.</p></div>
+      <div class="problem-item"><p>You've talked about "using AI" for 18 months. Nothing in your actual operations changed.</p></div>
+      <div class="problem-item"><p>The manual glue work costs 10&ndash;40 hours/month per function. That's a full-time hire you're burning silently.</p></div>
+    </div>
+    <p class="problem-kicker reveal">The irony for AI companies: you're supposed to be the ones who've solved this. <strong>You haven't. Almost nobody has.</strong></p>
+  </div>
+</section>
+
+<!-- FIT -->
+<section class="fit">
+  <div class="container">
+    <div class="section-eyebrow reveal">/// Is This You</div>
+    <h2 class="section-headline reveal">We're a fit if:</h2>
+    <div class="fit-grid">
+      <div class="fit-card reveal"><div class="fit-icon">// Scale</div><p>You're doing $5M&ndash;$100M and scaling fast enough that ops is the drag, not the engine.</p></div>
+      <div class="fit-card reveal"><div class="fit-icon">// Complexity</div><p>5+ people touch the same workflows across sales, onboarding, ops, CS, or finance.</p></div>
+      <div class="fit-card reveal"><div class="fit-icon">// Overdue</div><p>You know automation is overdue &mdash; but no one owns it and no one has time to scope it.</p></div>
+      <div class="fit-card reveal"><div class="fit-icon">// Reality</div><p>You've tried hiring an "AI person" and discovered that doesn't exist yet.</p></div>
+      <div class="fit-card reveal"><div class="fit-icon">// Outcome</div><p>You want systems that run quietly, not another vendor who needs managing.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-it-works" id="how">
+  <div class="container">
+    <div class="section-eyebrow reveal">/// The Protocol</div>
+    <h2 class="section-headline reveal">How it works.</h2>
+    <div class="steps-grid reveal">
+      <div class="step-item">
+        <div class="step-num">01</div>
+        <h3>Audit</h3>
+        <p>We map a real week in your business: the tools, the handoffs, the Slack threads holding things together. We find where the friction is costing you money.</p>
+      </div>
+      <div class="step-item">
+        <div class="step-num">02</div>
+        <h3>Configure</h3>
+        <p>We select and configure the right workflow for your specific stack, edge cases, and risk tolerance. Every build runs with explicit guardrails and human review checkpoints.</p>
+      </div>
+      <div class="step-item">
+        <div class="step-num">03</div>
+        <h3>Deploy</h3>
+        <p>Your first workflow goes live before the Ops Audit ends. Not in a sandbox. Not a demo. Running in your environment, on your data, with your team watching it work.</p>
+      </div>
+      <div class="step-item">
+        <div class="step-num">04</div>
+        <h3>Scale</h3>
+        <p>You get a prioritised roadmap: which workflows to deploy next, projected hours reclaimed per function, and whether to move into a Deployment Sprint or hand the playbook to your team.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SERVICES -->
+<section class="services" id="services">
+  <div class="container">
+    <div class="section-eyebrow reveal">/// Services</div>
+    <h2 class="section-headline reveal">Deploy. Automate. Monitor.</h2>
+    <p class="reveal" style="font-size:15px;font-weight:300;color:var(--text-secondary);max-width:560px;line-height:1.7;margin-bottom:0;">Everything starts with the Ops Audit. If the first deployment works, we keep going.</p>
+    <div class="services-grid reveal">
+      <div class="service-row">
+        <div class="service-left">
+          <div class="service-phase">Phase 01</div>
+          <h3>Ops Audit</h3>
+          <div class="service-price">$5,000 &middot; 2 weeks</div>
+        </div>
+        <div class="service-right">
+          <p>We map a real week in your business: the handoffs, the tools, the moments work falls through the cracks. Then we deploy one workflow. Live. In your stack. Before the audit ends.</p>
+          <ul class="service-details">
+            <li>Ops Blueprint: every tool, handoff, and failure point mapped with automation priorities</li>
+            <li>First workflow deployed live on your systems</li>
+            <li>30-day roadmap: prioritised deployment plan for additional modules</li>
+            <li>30-day stabilisation coverage included</li>
+          </ul>
+          <div class="service-guarantee">Guarantee: If we haven't deployed at least one workflow you want to keep live and shown a path to 10+ hours/month reclaimed, we deploy an additional workflow at our cost. Audit fee credits toward your first Sprint.</div>
+        </div>
+      </div>
+      <div class="service-row">
+        <div class="service-left">
+          <div class="service-phase">Phase 02</div>
+          <h3>Deployment Sprint</h3>
+          <div class="service-price">$20K&ndash;$40K &middot; 4 weeks</div>
+        </div>
+        <div class="service-right">
+          <p>Each sprint deploys 2&ndash;3 production workflow modules, configured for your tools and integrated end-to-end. One function area per sprint.</p>
+          <ul class="service-details">
+            <li>Fixed deployment window with weekly visibility</li>
+            <li>Built on your existing stack &mdash; no ripping and replacing</li>
+            <li>Explicit guardrails, human review checkpoints, and exception routing</li>
+            <li>30-day stabilisation included post-deployment</li>
+          </ul>
+        </div>
+      </div>
+      <div class="service-row">
+        <div class="service-left">
+          <div class="service-phase">Phase 03</div>
+          <h3>Retained Ops</h3>
+          <div class="service-price">$3K&ndash;$5K/month &middot; ongoing</div>
+        </div>
+        <div class="service-right">
+          <p>Monitoring, maintenance, and iteration on everything we've deployed. Quarterly reviews to find the next automation targets. Clear SLAs on what we own vs. what your team owns.</p>
+          <ul class="service-details">
+            <li>Minimum 6-month engagement for critical-path workflows</li>
+            <li>Month-to-month or per-incident support after that</li>
+            <li>Everything runs on your infrastructure &mdash; no vendor lock-in</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CREDIBILITY -->
+<section class="credibility" id="credential">
+  <div class="container">
+    <div class="section-eyebrow reveal">/// The Operator</div>
+    <h2 class="section-headline reveal">Built by an operator.<br>For operators.</h2>
+    <div class="cred-inner">
+      <div class="cred-text reveal">
+        <p>I'm not a consultant who's read about this. I was <strong>employee #9</strong> at an AI company. I built the operational infrastructure from scratch &mdash; across 500+ people in 30+ countries, 32x revenue growth, and every flavour of ops chaos in between.</p>
+        <p>I know exactly what breaks at $5M. At $20M. At $50M. I've been the "glue person" before realising <strong>the glue person shouldn't exist</strong>.</p>
+        <p>That experience is the product. No slide decks. No "transformation roadmaps." Working systems.</p>
+      </div>
+      <div class="cred-stats reveal">
+        <div class="cred-stat">
+          <div class="cred-stat-num">9 &rarr; 500+</div>
+          <div class="cred-stat-label">Headcount scaled at an AI-native enterprise</div>
+        </div>
+        <div class="cred-stat">
+          <div class="cred-stat-num">32x</div>
+          <div class="cred-stat-label">Revenue growth navigated during hyper-scale</div>
+        </div>
+        <div class="cred-stat">
+          <div class="cred-stat-num">30+</div>
+          <div class="cred-stat-label">Countries with operational infrastructure deployed</div>
+        </div>
+        <div class="cred-stat">
+          <div class="cred-stat-num">14 days</div>
+          <div class="cred-stat-label">First live autonomous workflow in your environment</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq" id="faq">
+  <div class="container">
+    <div class="section-eyebrow reveal">/// FAQ</div>
+    <h2 class="section-headline reveal">Questions you should be asking.</h2>
+    <div class="faq-grid reveal">
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">How is this different from hiring an internal ops or AI hire?<span class="faq-toggle">+</span></div>
+        <div class="faq-a"><p>Internal hires are great once you know exactly what to build. Most companies at this stage don't. This gets you the working system first &mdash; deployed, stabilised, and understood &mdash; then we help you define the right internal person to run it. You're not choosing between this and a hire. You're getting the thing the hire would have taken 6 months to figure out, in 4 weeks.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">What happens when something breaks?<span class="faq-toggle">+</span></div>
+        <div class="faq-a"><p>Every Ops Audit and Deployment Sprint includes a 30-day stabilisation window. If something breaks under normal use, we fix it at no extra cost. After that, the Retained Ops plan covers ongoing monitoring and updates. Per-incident support is available at published rates if you opt out.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Do you replace my team?<span class="faq-toggle">+</span></div>
+        <div class="faq-a"><p>No. The goal is to remove the work your team should never have been doing &mdash; so the people you hired to think can actually think. The best projects didn't eliminate roles. They eliminated the part of the role that made good people want to leave.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">What if we don't know what to automate?<span class="faq-toggle">+</span></div>
+        <div class="faq-a"><p>That's the normal starting point. Most clients come in with "this feels messy" or "we're drowning but can't point to why." The Ops Audit turns that into a specific list: workflows ranked by hours saved, implementation risk, and ROI. You don't need a plan. Arriving with a problem is enough.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Can you work with our existing tools and security constraints?<span class="faq-toggle">+</span></div>
+        <div class="faq-a"><p>Yes. We start from your current stack. No ripping and replacing. No forcing a preferred tool on you. If something can't be done safely with your setup, we'll tell you directly. The goal is systems you own and can run without us.</p></div>
+      </div>
+      <div class="faq-item" onclick="this.classList.toggle('open')">
+        <div class="faq-q">Who pays for the LLMs and automation infrastructure?<span class="faq-toggle">+</span></div>
+        <div class="faq-a"><p>Everything runs on your stack. Your CRM, your LLM accounts, your infrastructure. We provision and configure it all, but the underlying vendor costs are billed directly to you. Our fees cover scoping, build, deployment, and managed ops. No hidden markup on tooling.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INDUSTRIES MARQUEE -->
+<section class="industries">
+  <div class="industries-marquee">
+    <div class="marquee-track">
+      <span class="marquee-item">AI-Native Startups</span>
+      <span class="marquee-item">Growth SaaS</span>
+      <span class="marquee-item">Field Services</span>
+      <span class="marquee-item">Manufacturing</span>
+      <span class="marquee-item">Real Estate</span>
+      <span class="marquee-item">Law Firms</span>
+      <span class="marquee-item">Private Equity</span>
+      <span class="marquee-item">Healthcare</span>
+      <span class="marquee-item">E-Commerce</span>
+      <span class="marquee-item">Logistics</span>
+      <span class="marquee-item">Distributed Teams</span>
+      <span class="marquee-item">Insurance</span>
+      <span class="marquee-item">AI-Native Startups</span>
+      <span class="marquee-item">Growth SaaS</span>
+      <span class="marquee-item">Field Services</span>
+      <span class="marquee-item">Manufacturing</span>
+      <span class="marquee-item">Real Estate</span>
+      <span class="marquee-item">Law Firms</span>
+      <span class="marquee-item">Private Equity</span>
+      <span class="marquee-item">Healthcare</span>
+      <span class="marquee-item">E-Commerce</span>
+      <span class="marquee-item">Logistics</span>
+      <span class="marquee-item">Distributed Teams</span>
+      <span class="marquee-item">Insurance</span>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER CTA -->
+<section class="footer-cta" id="contact">
+  <div class="footer-cta-eyebrow reveal">/// No Decks. No Discovery Theatre.</div>
+  <h2 class="footer-cta-headline reveal">The first call is about<br>your actual workflows.</h2>
+  <p class="footer-cta-sub reveal">Tell us where the manual work is piling up. We'll come prepared. If the Ops Audit isn't the right fit, we'll tell you quickly.</p>
+  <a href="mailto:hello@jackhawkins.ops" class="cta-btn magnetic-btn reveal" style="opacity:1;animation:none;">
+    Book the Ops Audit
+    <span class="arrow">&rarr;</span>
+  </a>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer-bar">
+  <div class="container">
+    <ul class="footer-links">
+      <li><a href="#how">/// How It Works</a></li>
+      <li><a href="#services">/// Services</a></li>
+      <li><a href="#credential">/// Credential</a></li>
+      <li><a href="#contact">/// Contact</a></li>
+    </ul>
+    <div class="footer-copy">&copy; 2026 Jack Hawkins AI Ops</div>
+  </div>
+</footer>
+
+<script>
+// ── PARTICLES ──
+const C=document.getElementById('particle-canvas'),X=C.getContext('2d');
+let P=[],mX=0,mY=0,W,H;
+function rz(){W=C.width=innerWidth;H=C.height=innerHeight}
+rz();addEventListener('resize',rz);
+class Pt{constructor(){this.x=Math.random()*W;this.y=Math.random()*H;this.vx=(Math.random()-.5)*.25;this.vy=(Math.random()-.5)*.25;this.s=Math.random()*1.2+.4}
+update(){this.x+=this.vx;this.y+=this.vy;if(this.x<0||this.x>W)this.vx*=-1;if(this.y<0||this.y>H)this.vy*=-1;const dx=mX-this.x,dy=mY-this.y,d=Math.sqrt(dx*dx+dy*dy);if(d<180){this.x-=dx*.003;this.y-=dy*.003}}
+draw(){X.beginPath();X.arc(this.x,this.y,this.s,0,Math.PI*2);X.fillStyle='rgba(61,220,132,0.35)';X.fill()}}
+const NP=Math.min(90,Math.floor(W*H/16000));
+for(let i=0;i<NP;i++)P.push(new Pt);
+function dL(){for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){const dx=P[i].x-P[j].x,dy=P[i].y-P[j].y,d=Math.sqrt(dx*dx+dy*dy);if(d<150){X.beginPath();X.moveTo(P[i].x,P[i].y);X.lineTo(P[j].x,P[j].y);X.strokeStyle=`rgba(61,220,132,${.06*(1-d/150)})`;X.lineWidth=.5;X.stroke()}}}
+function aP(){X.clearRect(0,0,W,H);P.forEach(p=>{p.update();p.draw()});dL();requestAnimationFrame(aP)}
+aP();
+document.addEventListener('mousemove',e=>{mX=e.clientX;mY=e.clientY});
+
+// ── CURSOR ──
+const dot=document.getElementById('cursorDot'),ring=document.getElementById('cursorRing');
+let rX=0,rY=0;
+document.addEventListener('mousemove',e=>{dot.style.left=e.clientX-3+'px';dot.style.top=e.clientY-3+'px'});
+function aR(){rX+=(mX-rX-18)*.12;rY+=(mY-rY-18)*.12;ring.style.left=rX+'px';ring.style.top=rY+'px';requestAnimationFrame(aR)}
+aR();
+document.querySelectorAll('a,button,.magnetic-btn,.faq-item,.fit-card,.service-row,.step-item,.problem-item').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{dot.classList.add('hovering');ring.classList.add('hovering')});
+  el.addEventListener('mouseleave',()=>{dot.classList.remove('hovering');ring.classList.remove('hovering')});
+});
+
+// ── MAGNETIC BUTTONS ──
+document.querySelectorAll('.magnetic-btn').forEach(b=>{
+  b.addEventListener('mousemove',e=>{const r=b.getBoundingClientRect();b.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.12}px,${(e.clientY-r.top-r.height/2)*.12}px)`});
+  b.addEventListener('mouseleave',()=>{b.style.transform='translate(0,0)'});
+});
+
+// ── DECODE TEXT ──
+const ch='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&';
+function decode(el,delay){
+  const raw=el.getAttribute('data-text');
+  const hasEm=el.innerHTML.includes('<em>');
+  if(hasEm){setTimeout(()=>{el.style.opacity='1'},delay);return}
+  let iter=0;
+  setTimeout(()=>{el.style.opacity='1';
+    const iv=setInterval(()=>{
+      el.textContent=raw.split('').map((c,i)=>c===' '?' ':i<iter?raw[i]:ch[Math.floor(Math.random()*ch.length)]).join('');
+      iter+=.5;if(iter>=raw.length){clearInterval(iv);el.textContent=raw}
+    },30);
+  },delay);
+}
+document.querySelectorAll('.decode-text').forEach((el,i)=>decode(el,400+i*600));
+
+// ── SCROLL REVEAL ──
+const obs=new IntersectionObserver(e=>{e.forEach(en=>{if(en.isIntersecting)en.target.classList.add('visible')})},{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+// ── SMOOTH SCROLL ──
+document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',e=>{e.preventDefault();const t=document.querySelector(a.getAttribute('href'));if(t)t.scrollIntoView({behavior:'smooth'})})});
+</script>
+</body>
+</html>
